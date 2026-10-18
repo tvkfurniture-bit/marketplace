@@ -1,6 +1,6 @@
 
 const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)],post=b=>fetch(MP.api,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify(b)}).then(r=>r.json());
-const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));const ROOT=new URL('.',document.querySelector('script[src$="app.js"]').src).href;
 async function lead(ev,src){ev.preventDefault();const f=ev.target,m=f.querySelector('.msg');m.textContent='Sending…';try{const r=await post({action:'lead',email:f.email.value,source:src});m.textContent=r.ok?'Done! Check your inbox.':(r.error||'Something went wrong.')}catch(x){m.textContent='Network error. Please retry.'}}
 async function buy(slug){const em=$('#em').value,m=$('#bm'),btn=$('#bb'),L='Unlock full blueprint';m.textContent='';if(!/^\S+@\S+\.\S+$/.test(em)){m.textContent='Enter the Google account email you want access on.';return}
 btn.disabled=true;btn.textContent='Please wait…';let o;try{o=await post({action:'createOrder',slug,email:em})}catch(x){o={error:'Network error. Please retry.'}}
@@ -10,14 +10,19 @@ new Razorpay({key:o.key,order_id:o.order_id,amount:o.amount,currency:o.currency,
 if(v.ok){m.innerHTML='✅ Paid. Check your email, or <a href="'+v.access+'" target="_blank" rel="noopener">open your product</a>.'}else{m.textContent=(v.error||'Verification failed.')+' Payment ID: '+p.razorpay_payment_id}btn.textContent='Done'},modal:{ondismiss:()=>{btn.disabled=false;btn.textContent=L}}}).open()}
 $('#mb')&&($('#mb').onclick=()=>$('nav').classList.toggle('open'));
 const io=new IntersectionObserver(a=>a.forEach(x=>x.isIntersecting&&x.target.classList.add('in')),{threshold:.1});const rv=()=>$$('.rv:not(.in)').forEach(x=>io.observe(x));rv();
-if($('#grid')){let D=[],shown=0,ty='';const N=24,g=$('#grid'),uniq=k=>[...new Set(D.map(x=>x[k]))].sort();
-const fill=(id,k,all)=>$(id).innerHTML='<option value="">'+all+'</option>'+uniq(k).map(v=>'<option>'+esc(v)+'</option>').join('');
+const co=new IntersectionObserver(a=>a.forEach(x=>{if(x.isIntersecting){const el=x.target,n=+el.dataset.count;let t0;const st=ts=>{t0=t0||ts;const p=Math.min((ts-t0)/1200,1);el.textContent=Math.round(n*(1-Math.pow(1-p,3)));p<1&&requestAnimationFrame(st)};requestAnimationFrame(st);co.unobserve(el)}}));$$('[data-count]').forEach(x=>co.observe(x));
+const sbar=$('.sub'),ph=$('#ph');sbar&&ph&&new IntersectionObserver(a=>sbar.classList.toggle('on',!a[0].isIntersecting)).observe(ph);
+const CP=document.createElement('div');CP.id='cp';CP.innerHTML='<div class="cpb"><input id="cpi" placeholder="Search blueprints, cities, industries…" aria-label="Search"><div id="cpr"></div></div>';document.body.appendChild(CP);let CD=null,ci=0;
+const cdata=async()=>CD||(CD=await fetch(ROOT+'catalog.json').then(r=>r.json()));
+async function crender(){const q=$('#cpi').value.toLowerCase(),d=await cdata(),r=d.filter(x=>!q||(x.t+' '+x.c+' '+x.l).toLowerCase().includes(q)).slice(0,8);ci=0;$('#cpr').innerHTML=r.map((x,i)=>'<a href="'+ROOT+'o/'+x.s+'/" class="'+(i?'':'sel')+'"><span>'+x.i+'</span><b>'+esc(x.t)+'</b><small>'+esc(x.l)+'</small></a>').join('')||'<p style="padding:18px">No matches</p>'}
+const copen=()=>{CP.classList.add('on');$('#cpi').focus();crender()},cclose=()=>CP.classList.remove('on');
+document.addEventListener('keydown',ev=>{const t=document.activeElement.tagName;if(((ev.metaKey||ev.ctrlKey)&&ev.key=='k')||(ev.key=='/'&&!/INPUT|TEXTAREA|SELECT/.test(t))){ev.preventDefault();copen()}if(ev.key=='Escape')cclose();if(CP.classList.contains('on')){const a=$$('#cpr a');if(ev.key=='ArrowDown'||ev.key=='ArrowUp'){ev.preventDefault();ci=(ci+(ev.key=='ArrowDown'?1:-1)+a.length)%a.length;a.forEach((x,i)=>x.classList.toggle('sel',i==ci))}if(ev.key=='Enter'&&a[ci])location.href=a[ci].href}});
+$('#cpi').addEventListener('input',crender);CP.addEventListener('click',ev=>{if(ev.target==CP)cclose()});$$('[data-cp]').forEach(b=>b.onclick=copen);
+if($('#grid')){let D=[],shown=0,ty='';const N=24,g=$('#grid'),uniq=k=>[...new Set(D.map(x=>x[k]))].sort();const fill=(id,k,all)=>$(id).innerHTML='<option value="">'+all+'</option>'+uniq(k).map(v=>'<option>'+esc(v)+'</option>').join('');
 function view(more){const q=$('#q').value.toLowerCase(),l=$('#lo').value,c=$('#ca').value,so=$('#so').value;let f=D.filter(x=>(!ty||x.ty==ty)&&(!l||x.l==l)&&(!c||x.c==c)&&(!q||(x.t+' '+x.m+' '+x.c+' '+x.l).toLowerCase().includes(q)));
-if(so=='pa')f.sort((a,b)=>a.p-b.p);if(so=='pd')f.sort((a,b)=>b.p-a.p);if(so=='az')f.sort((a,b)=>a.t.localeCompare(b.t));
-if(!more){shown=0;g.innerHTML=''}f.slice(shown,shown+N).forEach(x=>g.insertAdjacentHTML('beforeend','<a class="card rv" href="o/'+x.s+'/"><div class="ct"><span class="tag '+(x.ty=='Software Tool'?'t':'')+'">'+(x.ty=='Software Tool'?'⚙ Software tool':'💡 Business blueprint')+'</span><span class="loc">📍 '+esc(x.l)+'</span></div><h3>'+esc(x.t)+'</h3><p>'+esc(x.m.slice(0,140))+'…</p><div class="cf"><span>'+esc(x.c)+'</span><b>'+MP.cur+' '+x.p+'</b></div><span class="go">Preview free →</span></a>'));
-shown+=N;$('#more').style.display=shown<f.length?'inline-block':'none';$('#cnt').textContent=f.length+' of '+D.length+' shown';rv()}
-fetch('catalog.json').then(r=>r.json()).then(d=>{D=d;fill('#lo','l','All locations');fill('#ca','c','All categories');view()});
-['q','lo','ca','so'].forEach(i=>$('#'+i).addEventListener('input',()=>view()));$('#more').onclick=()=>view(true);
-$$('.tab').forEach(t=>t.onclick=()=>{ty=t.dataset.ty;$$('.tab').forEach(x=>x.classList.toggle('on',x==t));view()});
-$$('[data-cat]').forEach(b=>b.onclick=()=>{$('#ca').value=b.dataset.cat;$('#catalog').scrollIntoView();view()});$$('[data-q]').forEach(b=>b.onclick=()=>{$('#q').value=b.dataset.q;$('#catalog').scrollIntoView();view()});
+if(so=='pa')f.sort((a,b)=>a.p-b.p);if(so=='pd')f.sort((a,b)=>b.p-a.p);if(so=='az')f.sort((a,b)=>a.t.localeCompare(b.t));if(!more){shown=0;g.innerHTML=''}
+f.slice(shown,shown+N).forEach(x=>g.insertAdjacentHTML('beforeend','<a class="card rv" href="o/'+x.s+'/" style="--h:'+x.h+'"><div class="cv">'+x.i+'</div><div class="cb"><div class="ct"><span class="tag">'+(x.ty=='Software Tool'?'Software tool':'Business blueprint')+'</span><span>📍 '+esc(x.l)+'</span></div><h3>'+esc(x.t)+'</h3><p>'+esc(x.m.slice(0,125))+'…</p><div class="cf"><span>'+esc(x.c.slice(0,28))+'</span><b>'+MP.cur+' '+x.p+'</b></div><span class="go">Preview free →</span></div></a>'));
+shown+=N;$('#more').style.display=shown<f.length?'inline-block':'none';$('#cnt').textContent=f.length+' of '+D.length+' shown';if(!f.length)g.innerHTML='<p>No matches. Try a broader search.</p>';rv()}
+fetch('catalog.json').then(r=>r.json()).then(d=>{D=d;fill('#lo','l','All locations');fill('#ca','c','All industries');view()});['q','lo','ca','so'].forEach(i=>$('#'+i).addEventListener('input',()=>view()));$('#more').onclick=()=>view(true);
+$$('.tab').forEach(t=>t.onclick=()=>{ty=t.dataset.ty;$$('.tab').forEach(x=>x.classList.toggle('on',x==t));view()});$$('[data-q]').forEach(b=>b.onclick=()=>{$('#q').value=b.dataset.q;$('#catalog').scrollIntoView();view()});
 $('#hq')&&$('#hq').addEventListener('submit',ev=>{ev.preventDefault();$('#q').value=$('#hs').value;$('#catalog').scrollIntoView();view()})}
