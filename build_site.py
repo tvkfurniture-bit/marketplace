@@ -1,76 +1,153 @@
 #!/usr/bin/env python3
-"""Static site generator. Source: live Apps Script export (API_URL + EXPORT_KEY env) or --csv opportunities.csv. Output: ./docs (GitHub Pages / Cloudflare Pages)."""
-import os,sys,json,csv,html,urllib.request,urllib.parse,shutil,datetime
+"""Static site generator v2. Source: Apps Script export (API_URL + EXPORT_KEY env) or --csv. Output: ./docs"""
+import os,sys,json,csv,html,urllib.request,urllib.parse,shutil,datetime,re
 OUT='docs'; e=html.escape
+fix=lambda s:(s or '').replace('â€“','–').replace('â€™','’').replace('â€”','—')
 def load():
+    D=dict(brand_name='Venture Atlas',brand_color='#0f766e',site_url=os.environ.get('SITE_URL','https://example.github.io/repo'),support_email='',whatsapp='',business_address='',refund_days=7,currency='INR',tagline='Researched business blueprints and ready-to-build automation tools',disclaimer='Income figures are unverified illustrative estimates from the source research, not guarantees.')
     if '--csv' in sys.argv:
         rows=list(csv.DictReader(open('opportunities.csv',encoding='utf-8')))
         for r in rows: r['price']=r['price'] or ('999' if r['type']=='Software Tool' else '499')
-        s={'brand_name':'Venture Atlas','brand_color':'#0f766e','site_url':os.environ.get('SITE_URL','https://example.github.io/repo'),'support_email':'','disclaimer':'Income figures are unverified illustrative estimates from the source research, not guarantees.','currency':'INR'}
-        return s,rows,os.environ.get('API_URL','')
+        return D,rows,os.environ.get('API_URL',''),[]
     api=os.environ['API_URL']; u=api+('&' if '?' in api else '?')+urllib.parse.urlencode({'action':'export','key':os.environ['EXPORT_KEY']})
-    d=json.load(urllib.request.urlopen(u,timeout=60)); return d['settings'],d['items'],api
-S,ITEMS,API=load(); SITE=S['site_url'].rstrip('/'); B=e(S['brand_name'])
-CSS="""*{box-sizing:border-box}body{margin:0;font:16px/1.6 system-ui,Segoe UI,Arial;color:#0f172a;background:#f8fafc}a{color:var(--c)}
-:root{--c:%s}.w{max-width:1100px;margin:auto;padding:0 18px}header{background:#fff;border-bottom:1px solid #e2e8f0;position:sticky;top:0;z-index:9}
-header .w{display:flex;justify-content:space-between;align-items:center;height:60px}.logo{font-weight:800;color:var(--c);text-decoration:none;font-size:20px}
-.hero{background:linear-gradient(135deg,var(--c),#0f172a);color:#fff;padding:56px 0}.hero h1{font-size:clamp(28px,5vw,46px);margin:0 0 10px}.hero p{max-width:640px;opacity:.9}
-.bar{display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:10px;margin:-26px 0 18px}input,select{width:100%%;padding:12px;border:1px solid #cbd5e1;border-radius:10px;font:inherit;background:#fff}
-.g{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px}.card{background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:18px;display:flex;flex-direction:column;gap:8px;text-decoration:none;color:inherit;transition:.2s}
-.card:hover{transform:translateY(-3px);box-shadow:0 10px 24px #0001}.tag{display:inline-block;font-size:12px;padding:2px 9px;border-radius:99px;background:#ecfeff;color:var(--c);margin-right:4px}
-.btn{background:var(--c);color:#fff;border:0;padding:13px 22px;border-radius:10px;font:600 16px inherit;cursor:pointer;text-decoration:none;display:inline-block}.btn:disabled{opacity:.5}
-.lock{position:relative;background:#fff;border:1px dashed #94a3b8;border-radius:12px;padding:16px;margin:16px 0}.lock li{filter:blur(4px);user-select:none}.buy{background:#fff;border:2px solid var(--c);border-radius:14px;padding:20px;position:sticky;top:80px}
-.two{display:grid;grid-template-columns:2fr 1fr;gap:24px;margin:28px 0}.kpi{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:22px 0}.kpi div{background:#fff;border-radius:12px;padding:14px;text-align:center;border:1px solid #e2e8f0}.kpi b{display:block;font-size:22px;color:var(--c)}
-footer{padding:30px 0;color:#64748b;font-size:13px}.msg{margin-top:10px;font-size:14px}@media(max-width:760px){.bar,.two{grid-template-columns:1fr}.buy{position:static}.kpi{grid-template-columns:1fr 1fr}}"""%S['brand_color']
-CFG='window.MP='+json.dumps({'api':API,'currency':S.get('currency','INR'),'brand':S['brand_name']})+';'
-JS=r"""
-const $=s=>document.querySelector(s),post=b=>fetch(MP.api,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify(b)}).then(r=>r.json());
-async function lead(f,src){f.preventDefault();const m=f.target.querySelector('.msg');m.textContent='Sending…';const r=await post({action:'lead',email:f.target.email.value,source:src});m.textContent=r.ok?'Check your inbox ✔':(r.error||'Error')}
-async function buy(slug){const em=$('#em').value,m=$('#bm'),btn=$('#bb');m.textContent='';if(!/^\S+@\S+\.\S+$/.test(em)){m.textContent='Enter a valid email (access is linked to it).';return}
-btn.disabled=true;btn.textContent='Please wait…';const o=await post({action:'createOrder',slug,email:em});if(o.error){m.textContent=o.error;btn.disabled=false;btn.textContent='Unlock full blueprint';return}
-const load=()=>new Promise(r=>{if(window.Razorpay)return r();const s=document.createElement('script');s.src='https://checkout.razorpay.com/v1/checkout.js';s.onload=r;document.head.appendChild(s)});await load();
-new Razorpay({key:o.key,order_id:o.order_id,amount:o.amount,currency:o.currency,name:o.name,description:o.desc,prefill:{email:em},handler:async p=>{m.textContent='Verifying payment…';const v=await post({action:'verify',order_id:p.razorpay_order_id,payment_id:p.razorpay_payment_id,signature:p.razorpay_signature});
-if(v.ok){m.innerHTML='Paid ✔ Check your email, or <a href="'+v.access+'" target="_blank" rel="noopener">open your product</a>.'}else{m.textContent=v.error||'Verification failed. Contact support with your payment ID '+p.razorpay_payment_id}btn.textContent='Done'},modal:{ondismiss:()=>{btn.disabled=false;btn.textContent='Unlock full blueprint'}}}).open()}
-"""
-def page(title,desc,path,body,extra=''):
-    return f'''<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{e(title)}</title><meta name="description" content="{e(desc[:160])}"><link rel="canonical" href="{SITE}{path}">
-<meta property="og:title" content="{e(title)}"><meta property="og:description" content="{e(desc[:160])}"><meta property="og:type" content="website"><link rel="stylesheet" href="{'../'*(path.count('/')-1)}style.css">{extra}</head><body>
-<header><div class="w"><a class="logo" href="{'../'*(path.count('/')-1) or './'}">{B}</a><a href="{'../'*(path.count('/')-1)}#catalog">Browse</a></div></header>{body}
-<footer><div class="w">© {datetime.date.today().year} {B}. {e(S['disclaimer'])} {('Support: '+e(S['support_email'])) if S.get('support_email') else ''}</div></footer>
-<script src="{'../'*(path.count('/')-1)}config.js"></script><script src="{'../'*(path.count('/')-1)}app.js"></script></body></html>'''
-def leadform(src): return f'<form onsubmit="lead(event,\'{e(src)}\')" style="display:flex;gap:8px;flex-wrap:wrap"><input name="email" type="email" placeholder="you@email.com" required style="flex:1;min-width:180px"><button class="btn">Get free previews</button><div class="msg" style="width:100%"></div></form>'
-def item_page(r):
-    pv=r['description'][:330].rsplit(' ',1)[0]+'…'; tool=r['type']=='Software Tool'
-    labels=['Automation & integrations','Data model','UI/UX','Source estimate'] if tool else ['Scale path','Moat','Beginner step','Source yield estimate (unverified)']
-    ld={"@context":"https://schema.org","@type":"Product","name":r['title'],"description":r['summary'],"category":r['category'],"offers":{"@type":"Offer","price":r['price'],"priceCurrency":S.get('currency','INR'),"availability":"https://schema.org/InStock"}}
-    body=f'''<div class="w"><div class="two"><main><p><span class="tag">{e(r['type'])}</span><span class="tag">{e(r['location'])}</span><span class="tag">{e(r['category'])}</span></p><h1>{e(r['title'])}</h1><p><b>{e(r['summary'])}.</b></p><h2>Free preview</h2><p>{e(pv)}</p>
-<div class="lock"><b>🔒 Included in the full blueprint</b><ul>{''.join(f'<li>{l}: ████████ ████ ██████ ███</li>' for l in labels)}</ul></div>
-<h3>Get more like this</h3>{leadform(r['title'])}</main><aside><div class="buy"><div style="font-size:30px;font-weight:800">{e(S.get('currency','INR'))} {e(str(r['price']))}</div><p>One-time purchase. Delivered as a Google Doc shared to your email.</p>
-<input id="em" type="email" placeholder="Your Google account email"><br><br><button id="bb" class="btn" style="width:100%" onclick="buy('{e(r['slug'])}')">Unlock full blueprint</button><div id="bm" class="msg"></div></div></aside></div></div>'''
-    return page(r['seo_title'] or r['title'],r['seo_desc'] or r['summary'],f"/o/{r['slug']}/",body,f'<script type="application/ld+json">{json.dumps(ld)}</script>')
-shutil.rmtree(OUT,ignore_errors=True); os.makedirs(OUT+'/o')
-open(OUT+'/style.css','w').write(CSS); open(OUT+'/config.js','w').write(CFG); open(OUT+'/.nojekyll','w').write('')
+    d=json.load(urllib.request.urlopen(u,timeout=90)); D.update({k:v for k,v in d['settings'].items() if v not in ('',None)}); return D,d['items'],api,d.get('testimonials',[])
+S,ITEMS,API,TEST=load(); SITE=S['site_url'].rstrip('/'); B=e(S['brand_name']); CUR=S.get('currency','INR'); RD=S.get('refund_days',7); MAIL=S.get('support_email','')
 for r in ITEMS:
-    os.makedirs(f"{OUT}/o/{r['slug']}"); open(f"{OUT}/o/{r['slug']}/index.html",'w',encoding='utf-8').write(item_page(r))
-cat=[{'s':r['slug'],'t':r['title'],'ty':r['type'],'l':r['location'],'c':r['category'],'m':r['summary'],'p':r['price']} for r in ITEMS]
-json.dump(cat,open(OUT+'/catalog.json','w'),separators=(',',':'))
-HOME_JS=r"""
-let D=[],shown=0;const N=48,g=$('#grid');const uniq=k=>[...new Set(D.map(x=>x[k]))].sort();
-function fill(id,k,all){$(id).innerHTML='<option value="">'+all+'</option>'+uniq(k).map(v=>'<option>'+v.replace(/&/g,'&amp;')+'</option>').join('')}
-const esc=s=>s.replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-function view(more){const q=$('#q').value.toLowerCase(),t=$('#ty').value,l=$('#lo').value,c=$('#ca').value;const f=D.filter(x=>(!t||x.ty==t)&&(!l||x.l==l)&&(!c||x.c==c)&&(!q||(x.t+' '+x.m+' '+x.c+' '+x.l).toLowerCase().includes(q)));
-if(!more){shown=0;g.innerHTML=''}f.slice(shown,shown+N).forEach(x=>g.insertAdjacentHTML('beforeend','<a class="card" href="o/'+x.s+'/"><div><span class="tag">'+esc(x.ty)+'</span><span class="tag">'+esc(x.l)+'</span></div><b>'+esc(x.t)+'</b><span style="color:#475569;font-size:14px">'+esc(x.m.slice(0,130))+'…</span><b style="margin-top:auto;color:var(--c)">'+MP.currency+' '+x.p+' · Preview free</b></a>'));
-shown+=N;$('#more').style.display=shown<f.length?'inline-block':'none';$('#cnt').textContent=f.length+' results'}
-fetch('catalog.json').then(r=>r.json()).then(d=>{D=d;fill('#ty','ty','All types');fill('#lo','l','All locations');fill('#ca','c','All categories');$('#kt').textContent=d.length;$('#kl').textContent=uniq('l').length;$('#kc').textContent=uniq('c').length;view()});
-['q','ty','lo','ca'].forEach(i=>$('#'+i).addEventListener('input',()=>view()));$('#more').onclick=()=>view(true);
+    for k in r: r[k]=fix(r[k])
+CSS="""
+:root{--c:BRAND;--ink:#0b1220;--mut:#5b6678;--bd:#e5e9f0;--bg:#f6f8fb;--g:linear-gradient(135deg,var(--c),#6366f1)}
+*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;font:16px/1.65 Inter,system-ui,'Segoe UI',Arial,sans-serif;color:var(--ink);background:#fff}
+a{color:var(--c)}.w{max-width:1160px;margin:auto;padding:0 20px}h1,h2,h3{line-height:1.2;letter-spacing:-.02em;margin:0 0 .5em}h2{font-size:clamp(26px,3.4vw,38px)}
+header{position:sticky;top:0;z-index:50;background:#ffffffe6;backdrop-filter:blur(14px);border-bottom:1px solid var(--bd)}.nav{display:flex;align-items:center;justify-content:space-between;height:70px}
+.logo{font-weight:800;font-size:21px;color:var(--ink);text-decoration:none;display:flex;gap:9px;align-items:center}.logo i{width:30px;height:30px;border-radius:9px;background:var(--g)}
+nav a{margin:0 14px;color:#334155;text-decoration:none;font-weight:500;font-size:15px}nav a:hover{color:var(--c)}#mb{display:none;background:none;border:1px solid var(--bd);border-radius:8px;font-size:22px;padding:2px 10px}
+.btn{background:var(--g);color:#fff!important;border:0;padding:13px 24px;border-radius:12px;font:600 16px inherit;cursor:pointer;text-decoration:none;display:inline-block;box-shadow:0 8px 20px #0f766e33;transition:.2s}.btn:hover{transform:translateY(-2px)}.btn:disabled{opacity:.55}
+.btn.o{background:#fff;color:var(--ink)!important;border:1px solid var(--bd);box-shadow:none}.sm{padding:9px 18px;font-size:14px}
+.hero{background:radial-gradient(900px 400px at 85% -10%,#6366f155,transparent),radial-gradient(700px 400px at 0 0,#14b8a655,transparent),#0b1220;color:#fff;padding:84px 0 110px}.hero h1{font-size:clamp(34px,5.6vw,60px);max-width:860px}
+.hero h1 em{font-style:normal;background:linear-gradient(90deg,#5eead4,#a5b4fc);-webkit-background-clip:text;color:transparent}.hero p{max-width:640px;color:#cbd5e1;font-size:19px}
+.sb{display:flex;gap:10px;max-width:700px;margin:28px 0 16px;background:#ffffff14;border:1px solid #ffffff33;border-radius:16px;padding:8px;backdrop-filter:blur(10px)}.sb input{flex:1;background:transparent;border:0;color:#fff;font:inherit;padding:10px 14px;outline:0}.sb input::placeholder{color:#94a3b8}
+.chips{display:flex;gap:8px;flex-wrap:wrap}.chip{background:#ffffff14;border:1px solid #ffffff33;color:#e2e8f0;border-radius:99px;padding:5px 14px;font-size:14px;cursor:pointer}
+.trust{display:flex;gap:26px;flex-wrap:wrap;margin-top:34px;color:#cbd5e1;font-size:14px}.trust span:before{content:'✓ ';color:#5eead4;font-weight:700}
+.sec{padding:76px 0}.alt{background:var(--bg)}.ctr{text-align:center}.sub{color:var(--mut);max-width:620px;margin:0 auto 38px}
+.steps,.feat,.cats{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:18px}.box{background:#fff;border:1px solid var(--bd);border-radius:16px;padding:24px}.box b.n{display:inline-grid;place-items:center;width:38px;height:38px;border-radius:11px;background:var(--g);color:#fff;margin-bottom:12px}
+.catb{cursor:pointer;text-align:left;font:inherit;transition:.2s}.catb:hover{border-color:var(--c);transform:translateY(-3px)}.catb small{color:var(--mut)}
+.tools{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:18px;align-items:center}.tools select,.tools input{padding:11px 14px;border:1px solid var(--bd);border-radius:11px;font:inherit;background:#fff;min-width:0}.tools input{flex:1;min-width:220px}
+.tab{padding:9px 18px;border:1px solid var(--bd);border-radius:99px;background:#fff;cursor:pointer;font:500 14px inherit}.tab.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+.g{display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:18px}.card{background:#fff;border:1px solid var(--bd);border-radius:18px;padding:22px;display:flex;flex-direction:column;gap:10px;text-decoration:none;color:inherit;position:relative;overflow:hidden;transition:.25s}
+.card:before{content:'';position:absolute;inset:0 0 auto 0;height:4px;background:var(--g)}.card:hover{transform:translateY(-5px);box-shadow:0 18px 36px #0b122014;border-color:#cbd5e1}.card h3{font-size:19px;margin:0}.card p{margin:0;color:var(--mut);font-size:14.5px}
+.ct{display:flex;justify-content:space-between;gap:8px;font-size:12.5px}.tag{background:#ecfdf5;color:#047857;padding:3px 10px;border-radius:99px;font-weight:600}.tag.t{background:#eef2ff;color:#4338ca}.loc{color:var(--mut)}
+.cf{margin-top:auto;display:flex;justify-content:space-between;align-items:center;padding-top:12px;border-top:1px solid var(--bd);font-size:13px;color:var(--mut)}.cf b{font-size:18px;color:var(--ink)}.go{color:var(--c);font-weight:600;font-size:14px}
+.crumb{font-size:14px;color:var(--mut);padding:22px 0 0}.crumb a{color:var(--mut)}.two{display:grid;grid-template-columns:1fr 380px;gap:36px;padding:26px 0 60px;align-items:start}
+.pill{display:inline-block;margin:0 6px 6px 0}.lock{border:1px solid var(--bd);border-radius:16px;overflow:hidden;margin:22px 0}.lock>div{display:flex;gap:14px;padding:16px 20px;border-bottom:1px solid var(--bd);align-items:center}.lock>div:last-child{border:0}.lock .bar{height:10px;border-radius:5px;background:linear-gradient(90deg,#e2e8f0,#f1f5f9);flex:1}.lock b{min-width:170px}
+.buy{background:#fff;border:1px solid var(--bd);border-radius:20px;padding:26px;position:sticky;top:90px;box-shadow:0 20px 44px #0b122014}.buy .pr{font-size:40px;font-weight:800}.buy input{width:100%;padding:13px;border:1px solid var(--bd);border-radius:11px;font:inherit;margin:12px 0}
+.buy ul,.ul{list-style:none;padding:0;margin:14px 0}.buy li,.ul li{padding:5px 0 5px 26px;position:relative;font-size:14.5px}.buy li:before,.ul li:before{content:'✓';position:absolute;left:0;color:var(--c);font-weight:800}
+.msg{margin-top:8px;font-size:14px}.glance{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:18px 0}.glance div{background:var(--bg);border-radius:12px;padding:12px 16px;font-size:14px}.glance b{display:block;font-size:12px;color:var(--mut);text-transform:uppercase;letter-spacing:.05em}
+details{background:#fff;border:1px solid var(--bd);border-radius:14px;padding:16px 20px;margin-bottom:10px}summary{cursor:pointer;font-weight:600}details p{color:var(--mut);margin:10px 0 0}
+.quote{font-size:16px}.quote small{color:var(--mut)}.cta{background:var(--g);color:#fff;border-radius:26px;padding:56px 28px;text-align:center}.cta .sb{margin:22px auto 0}
+.legal{max-width:780px;margin:auto;padding:50px 20px 80px}.legal h2{font-size:22px;margin-top:1.6em}.legal p,.legal li{color:#334155}
+footer{background:#0b1220;color:#94a3b8;padding:60px 0 30px;font-size:14.5px}.fg{display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:30px}footer h4{color:#fff;margin:0 0 12px}footer a{color:#94a3b8;text-decoration:none;display:block;padding:3px 0}footer a:hover{color:#fff}.fb{border-top:1px solid #1e293b;margin-top:34px;padding-top:20px;font-size:13px}
+.mbar{display:none}.rv{opacity:0;transform:translateY(14px);transition:.6s}.rv.in{opacity:1;transform:none}
+@media(max-width:860px){nav{display:none;position:absolute;top:70px;left:0;right:0;background:#fff;padding:14px 20px;border-bottom:1px solid var(--bd)}nav.open{display:block}nav a{display:block;margin:0;padding:10px 0}#mb{display:block}.two{grid-template-columns:1fr}.buy{position:static}.fg{grid-template-columns:1fr 1fr}.hero{padding:56px 0 80px}.sb{flex-direction:column}.lock b{min-width:120px}
+.mbar{display:flex;position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:1px solid var(--bd);padding:10px 16px;justify-content:space-between;align-items:center;z-index:40}body.pp{padding-bottom:70px}}
 """
-open(OUT+'/app.js','w').write(JS+HOME_JS.replace("fetch('catalog.json')","if($('#grid'))fetch('catalog.json')").replace("['q','ty','lo','ca'].forEach","if($('#grid'))['q','ty','lo','ca'].forEach"))
-home=f'''<section class="hero"><div class="w"><h1>Validated business blueprints &amp; ready-to-deploy tools</h1><p>Search {len(ITEMS)}+ opportunities by city and industry. Preview free, unlock the full blueprint when you are ready.</p><br>{leadform('homepage')}</div></section>
-<div class="w"><div class="bar" id="catalog"><input id="q" placeholder="Search e.g. clinic, logistics, Garia…"><select id="ty"></select><select id="lo"></select><select id="ca"></select></div>
-<div class="kpi"><div><b id="kt">–</b>Products</div><div><b id="kl">–</b>Locations</div><div><b id="kc">–</b>Categories</div><div><b id="cnt">–</b>Showing</div></div>
-<div class="g" id="grid"></div><p style="text-align:center"><button class="btn" id="more">Load more</button></p></div>'''
-open(OUT+'/index.html','w',encoding='utf-8').write(page(S['brand_name']+' – Business Opportunity Marketplace','Search validated local business blueprints and automation tools. Free previews, instant delivery.','/',home))
-urls=[SITE+'/']+[f"{SITE}/o/{r['slug']}/" for r in ITEMS]
-open(OUT+'/sitemap.xml','w').write('<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'+''.join(f'<url><loc>{u}</loc></url>' for u in urls)+'</urlset>')
-open(OUT+'/robots.txt','w').write(f'User-agent: *\nAllow: /\nSitemap: {SITE}/sitemap.xml\n')
-print('built',len(ITEMS),'pages')
+JS=r"""
+const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)],post=b=>fetch(MP.api,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify(b)}).then(r=>r.json());
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+async function lead(ev,src){ev.preventDefault();const f=ev.target,m=f.querySelector('.msg');m.textContent='Sending…';try{const r=await post({action:'lead',email:f.email.value,source:src});m.textContent=r.ok?'Done! Check your inbox.':(r.error||'Something went wrong.')}catch(x){m.textContent='Network error. Please retry.'}}
+async function buy(slug){const em=$('#em').value,m=$('#bm'),btn=$('#bb'),L='Unlock full blueprint';m.textContent='';if(!/^\S+@\S+\.\S+$/.test(em)){m.textContent='Enter the Google account email you want access on.';return}
+btn.disabled=true;btn.textContent='Please wait…';let o;try{o=await post({action:'createOrder',slug,email:em})}catch(x){o={error:'Network error. Please retry.'}}
+if(o.error){m.textContent=o.error;btn.disabled=false;btn.textContent=L;return}
+await new Promise(r=>{if(window.Razorpay)return r();const s=document.createElement('script');s.src='https://checkout.razorpay.com/v1/checkout.js';s.onload=r;document.head.appendChild(s)});
+new Razorpay({key:o.key,order_id:o.order_id,amount:o.amount,currency:o.currency,name:o.name,description:o.desc,prefill:{email:em},handler:async p=>{m.textContent='Verifying payment…';const v=await post({action:'verify',order_id:p.razorpay_order_id,payment_id:p.razorpay_payment_id,signature:p.razorpay_signature});
+if(v.ok){m.innerHTML='✅ Paid. Check your email, or <a href="'+v.access+'" target="_blank" rel="noopener">open your product</a>.'}else{m.textContent=(v.error||'Verification failed.')+' Payment ID: '+p.razorpay_payment_id}btn.textContent='Done'},modal:{ondismiss:()=>{btn.disabled=false;btn.textContent=L}}}).open()}
+$('#mb')&&($('#mb').onclick=()=>$('nav').classList.toggle('open'));
+const io=new IntersectionObserver(a=>a.forEach(x=>x.isIntersecting&&x.target.classList.add('in')),{threshold:.1});const rv=()=>$$('.rv:not(.in)').forEach(x=>io.observe(x));rv();
+if($('#grid')){let D=[],shown=0,ty='';const N=24,g=$('#grid'),uniq=k=>[...new Set(D.map(x=>x[k]))].sort();
+const fill=(id,k,all)=>$(id).innerHTML='<option value="">'+all+'</option>'+uniq(k).map(v=>'<option>'+esc(v)+'</option>').join('');
+function view(more){const q=$('#q').value.toLowerCase(),l=$('#lo').value,c=$('#ca').value,so=$('#so').value;let f=D.filter(x=>(!ty||x.ty==ty)&&(!l||x.l==l)&&(!c||x.c==c)&&(!q||(x.t+' '+x.m+' '+x.c+' '+x.l).toLowerCase().includes(q)));
+if(so=='pa')f.sort((a,b)=>a.p-b.p);if(so=='pd')f.sort((a,b)=>b.p-a.p);if(so=='az')f.sort((a,b)=>a.t.localeCompare(b.t));
+if(!more){shown=0;g.innerHTML=''}f.slice(shown,shown+N).forEach(x=>g.insertAdjacentHTML('beforeend','<a class="card rv" href="o/'+x.s+'/"><div class="ct"><span class="tag '+(x.ty=='Software Tool'?'t':'')+'">'+(x.ty=='Software Tool'?'⚙ Software tool':'💡 Business blueprint')+'</span><span class="loc">📍 '+esc(x.l)+'</span></div><h3>'+esc(x.t)+'</h3><p>'+esc(x.m.slice(0,140))+'…</p><div class="cf"><span>'+esc(x.c)+'</span><b>'+MP.cur+' '+x.p+'</b></div><span class="go">Preview free →</span></a>'));
+shown+=N;$('#more').style.display=shown<f.length?'inline-block':'none';$('#cnt').textContent=f.length+' of '+D.length+' shown';rv()}
+fetch('catalog.json').then(r=>r.json()).then(d=>{D=d;fill('#lo','l','All locations');fill('#ca','c','All categories');view()});
+['q','lo','ca','so'].forEach(i=>$('#'+i).addEventListener('input',()=>view()));$('#more').onclick=()=>view(true);
+$$('.tab').forEach(t=>t.onclick=()=>{ty=t.dataset.ty;$$('.tab').forEach(x=>x.classList.toggle('on',x==t));view()});
+$$('[data-cat]').forEach(b=>b.onclick=()=>{$('#ca').value=b.dataset.cat;$('#catalog').scrollIntoView();view()});$$('[data-q]').forEach(b=>b.onclick=()=>{$('#q').value=b.dataset.q;$('#catalog').scrollIntoView();view()});
+$('#hq')&&$('#hq').addEventListener('submit',ev=>{ev.preventDefault();$('#q').value=$('#hs').value;$('#catalog').scrollIntoView();view()})}
+"""
+FAQ=[("What exactly do I get when I buy?","A structured blueprint delivered as a Google Doc: the full overview, scale path, moat, a concrete first step and the source yield estimate for business blueprints; or the concept, data model, automation plan and UI spec for software tools."),
+("How do I receive it?","Right after payment you get an email with a secure link, and the Doc is shared to the Google account email you enter at checkout. Use a Gmail or Google Workspace address."),
+("Can I preview before paying?","Yes. Every product page has a free preview, and you can browse the whole catalog without signing up."),
+("Are the income figures guaranteed?","No. Revenue figures are unverified illustrative estimates from the source research. Results depend on your execution, market and pricing. This is not financial or professional advice."),
+("How was this content produced?","The blueprints are compiled with AI-assisted research and are meant as structured starting points. Always validate demand locally before investing money."),
+("What is your refund policy?","See our refund page. In short: if your file doesn't open or is materially different from the page description, contact us within %s days."%RD),
+("Can I resell or share the blueprint?","Your purchase is for your own personal or business use. Reselling or redistributing the document is not permitted."),
+("Who do I contact for help?","Use the contact page. We reply by email%s."%(" and WhatsApp" if S.get('whatsapp') else ""))]
+def faq_html(): return ''.join('<details class="rv"><summary>%s</summary><p>%s</p></details>'%(e(q),e(a)) for q,a in FAQ)
+def faq_ld(): return '<script type="application/ld+json">%s</script>'%json.dumps({"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":q,"acceptedAnswer":{"@type":"Answer","text":a}} for q,a in FAQ]})
+def leadform(src,btn='Get free previews'): return '<form class="sb" onsubmit="lead(event,\'%s\')"><input name="email" type="email" placeholder="you@email.com" required><button class="btn">%s</button><div class="msg" style="width:100%%"></div></form>'%(e(src),btn)
+def page(title,desc,path,body,extra='',cls=''):
+    R='../'*(path.count('/')-1)
+    wa='<a href="https://wa.me/%s">WhatsApp</a>'%re.sub(r'\D','',S['whatsapp']) if S.get('whatsapp') else ''
+    return f'''<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{e(title)}</title><meta name="description" content="{e(desc[:160])}"><link rel="canonical" href="{SITE}{path}">
+<meta property="og:title" content="{e(title)}"><meta property="og:description" content="{e(desc[:160])}"><meta property="og:type" content="website"><meta name="theme-color" content="{S['brand_color']}"><link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"><link rel="stylesheet" href="{R}style.css">{extra}</head><body class="{cls}">
+<header><div class="w nav"><a class="logo" href="{R or './'}"><i></i>{B}</a><button id="mb" aria-label="Menu">☰</button><nav><a href="{R}#catalog">Browse</a><a href="{R}#how">How it works</a><a href="{R}faq/">FAQ</a><a href="{R}about/">About</a><a href="{R}contact/">Contact</a><a class="btn sm" href="{R}#catalog">Explore blueprints</a></nav></div></header>{body}
+<footer><div class="w"><div class="fg"><div><h4>{B}</h4><p>{e(S['tagline'])}.</p><p>{e(MAIL)}</p></div><div><h4>Explore</h4><a href="{R}#catalog">All blueprints</a><a href="{R}#how">How it works</a><a href="{R}faq/">FAQ</a></div><div><h4>Company</h4><a href="{R}about/">About</a><a href="{R}contact/">Contact</a>{wa}</div><div><h4>Legal</h4><a href="{R}terms/">Terms</a><a href="{R}privacy/">Privacy</a><a href="{R}refund/">Refund policy</a></div></div>
+<div class="fb">© {datetime.date.today().year} {B}. {e(S['disclaimer'])} Content is for information only and is not financial, legal or professional advice. Payments processed securely by Razorpay.</div></div></footer>
+<script src="{R}config.js"></script><script src="{R}app.js"></script></body></html>'''
+def pitch(r): 
+    d=r['description']; ss=re.split(r'(?<=[.!?])\s+',d); return ' '.join(ss[:2])[:420]
+def card(r): 
+    tool=r['type']=='Software Tool'
+    return f'<a class="card" href="../{r["slug"]}/"><div class="ct"><span class="tag {"t" if tool else ""}">{"⚙ Software tool" if tool else "💡 Business blueprint"}</span><span class="loc">📍 {e(r["location"])}</span></div><h3>{e(r["title"])}</h3><p>{e(r["summary"][:140])}…</p><div class="cf"><span>{e(r["category"])}</span><b>{CUR} {e(str(r["price"]))}</b></div><span class="go">Preview free →</span></a>'
+def item_page(r):
+    tool=r['type']=='Software Tool'; rel=[x for x in ITEMS if x['category']==r['category'] and x['slug']!=r['slug']][:3]
+    inside=[('Concept & scope','Full product concept and target users'),('Data model','Sheet/table structure and relationships'),('Automation & integrations','Triggers, APIs and workflow logic'),('UI/UX specification','Screens, interactions and dashboards')] if tool else [('Full market overview','The complete analysis for this local opportunity'),('Scale path','How it can grow beyond the first customers'),('Competitive moat','What protects it once running'),('First step to start','A concrete beginner action'),('Source yield estimate','Unverified illustrative revenue model')]
+    ld=[{"@context":"https://schema.org","@type":"Product","name":r['title'],"description":r['summary'],"category":r['category'],"brand":{"@type":"Brand","name":S['brand_name']},"offers":{"@type":"Offer","price":r['price'],"priceCurrency":CUR,"availability":"https://schema.org/InStock","url":f"{SITE}/o/{r['slug']}/"}},
+    {"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":SITE+'/'},{"@type":"ListItem","position":2,"name":r['category'],"item":SITE+'/'},{"@type":"ListItem","position":3,"name":r['title']}]}]
+    body=f'''<div class="w"><div class="crumb"><a href="../../">Home</a> › {e(r['category'])} › {e(r['title'])}</div><div class="two"><main><span class="tag {"t" if tool else ""} pill">{"⚙ Software tool" if tool else "💡 Business blueprint"}</span><span class="tag pill">📍 {e(r['location'])}</span><h1 style="font-size:clamp(28px,4vw,42px)">{e(r['title'])}</h1>
+<p style="font-size:19px;color:var(--mut)">{e(r['summary'])}.</p><div class="glance"><div><b>Format</b>Google Doc, instant delivery</div><div><b>Category</b>{e(r['category'])}</div><div><b>Best for</b>{"Builders & agencies" if tool else "Aspiring founders & consultants"}</div><div><b>Access</b>Private, linked to your email</div></div>
+<h2 style="font-size:24px">Free preview</h2><p>{e(pitch(r))}…</p><h2 style="font-size:24px;margin-top:30px">What’s inside the full {"specification" if tool else "blueprint"}</h2><div class="lock">{''.join(f'<div><b>🔒 {a}</b><span style="color:var(--mut);font-size:14px">{b}</span></div>' for a,b in inside)}</div>
+<h2 style="font-size:24px;margin-top:30px">Common questions</h2>{faq_html()[:0]}<details open><summary>How do I get it?</summary><p>Pay securely, then a private Google Doc is shared to your email and a link is emailed instantly.</p></details><details><summary>Are the figures guaranteed?</summary><p>No. Figures are unverified illustrative estimates. Validate locally before investing.</p></details><details><summary>Refunds?</summary><p>See the <a href="../../refund/">refund policy</a> ({RD}-day window for delivery problems).</p></details>
+{('<h2 style="font-size:24px;margin-top:36px">Related in '+e(r['category'])+'</h2><div class="g">'+''.join(card(x) for x in rel)+'</div>') if rel else ''}</main>
+<aside><div class="buy" id="buy"><div class="pr">{CUR} {e(str(r['price']))}</div><small style="color:var(--mut)">One-time payment · no subscription</small><input id="em" type="email" placeholder="Your Google account email"><button id="bb" class="btn" style="width:100%" onclick="buy('{e(r['slug'])}')">Unlock full blueprint</button><div id="bm" class="msg"></div>
+<ul><li>Instant email delivery</li><li>Private Google Doc shared to you</li><li>Secure checkout by Razorpay</li><li>{RD}-day delivery-problem refund</li></ul><details><summary>Not ready? Get free previews</summary>{leadform(r['title'],'Send me')}</details></div></aside></div></div>
+<div class="mbar"><b>{CUR} {e(str(r['price']))}</b><a class="btn sm" href="#buy">Unlock now</a></div>'''
+    return page(r['title']+' – '+r['location']+' | '+S['brand_name'] if r['location']!='Global' else r['title']+' | '+S['brand_name'],r['summary'],f"/o/{r['slug']}/",body,'<script type="application/ld+json">%s</script>'%json.dumps(ld),'pp')
+def legal(kind):
+    n=B; m=e(MAIL) or 'our contact email'; a=e(S.get('business_address','')) or ''
+    T={'terms':('Terms of Service',[('Overview',f'These terms govern your use of {n} and purchase of digital blueprints and tools. By buying you agree to them.'),('Digital products',f'Products are digital documents delivered by email and Google Drive sharing. They are for your personal or business use only. Resale, redistribution or public sharing is prohibited.'),('No guarantees',S['disclaimer']+' Content is informational, compiled with AI-assisted research, and is not financial, legal or professional advice. You are responsible for validating any idea before acting on it.'),('Pricing and payment',f'Prices are shown in {CUR} and may change. Payments are processed by Razorpay; we do not store card details.'),('Liability','To the extent permitted by law, our liability is limited to the amount you paid for the product.'),('Governing law','These terms are governed by the laws of India.'),('Contact',f'Questions: {m}.')]),
+    'privacy':('Privacy Policy',[('What we collect',f'Your email address (and name if provided) when you join our list or buy, plus payment references from Razorpay. We do not receive your card details.'),('How we use it','To deliver your purchase, send receipts and support messages, and send occasional product emails you can opt out of at any time.'),('Third parties','Google (Sheets, Drive, Gmail) to store data and deliver files; Razorpay for payments; GitHub for hosting this site.'),('Retention and your rights',f'Ask us at {m} to access, correct or delete your data and we will respond within a reasonable time.'),('Cookies','This site does not use advertising cookies. Third-party checkout may set its own.')]),
+    'refund':('Refund Policy',[('Digital goods',f'Because products are delivered instantly, purchases are generally final.'),(f'{RD}-day delivery guarantee',f'If you did not receive access, the file will not open, or it is materially different from its page description, contact {m} within {RD} days of purchase with your payment ID and we will fix it or refund you.'),('Not covered','Refunds are not given because a business idea did not produce results, since outcomes depend on your execution and market.'),('How refunds are paid','Approved refunds go back to the original payment method, usually within 5-7 business days.')])}[kind]
+    return T[0],''.join(f'<h2>{a1}</h2><p>{b1}</p>' for a1,b1 in T[1])
+def simple(path,title,desc,inner,extra=''): open_(path,page(title+' | '+S['brand_name'],desc,'/'+path+'/','<div class="legal">'+inner+'</div>',extra))
+def open_(path,html_):
+    os.makedirs(f'{OUT}/{path}',exist_ok=True); open(f'{OUT}/{path}/index.html','w',encoding='utf-8').write(html_)
+shutil.rmtree(OUT,ignore_errors=True); os.makedirs(OUT+'/o')
+open(OUT+'/style.css','w').write(CSS.replace('BRAND',S['brand_color'])); open(OUT+'/.nojekyll','w').write('')
+open(OUT+'/config.js','w').write('window.MP='+json.dumps({'api':API,'cur':CUR,'brand':S['brand_name']})+';'); open(OUT+'/app.js','w').write(JS)
+for r in ITEMS: open_('o/'+r['slug'],item_page(r))
+json.dump([{'s':r['slug'],'t':r['title'],'ty':r['type'],'l':r['location'],'c':r['category'],'m':r['summary'],'p':float(r['price'])} for r in ITEMS],open(OUT+'/catalog.json','w'),separators=(',',':'))
+for k in ('terms','privacy','refund'): t,i=legal(k); simple(k,t,t+' for '+S['brand_name'],f'<h1>{t}</h1><p><small>Last updated {datetime.date.today():%d %B %Y}</small></p>'+i)
+simple('faq','Frequently asked questions','Answers about delivery, previews, refunds and how the blueprints are produced.','<h1>Frequently asked questions</h1>'+faq_html(),faq_ld())
+wa=f'<p>💬 WhatsApp: <a href="https://wa.me/{re.sub(chr(92)+"D","",S["whatsapp"])}">{e(S["whatsapp"])}</a></p>' if S.get('whatsapp') else ''
+simple('contact','Contact us','Get help with an order or ask a question before buying.',f'<h1>Contact us</h1><p>We usually reply within one business day.</p><p>📧 Email: <a href="mailto:{m_ if (m_:=e(MAIL)) else ""}">{e(MAIL) or "add support_email in Settings"}</a></p>{wa}<p>{e(S.get("business_address",""))}</p><h2>Include in your message</h2><p>Your payment ID and the product name, so we can help faster.</p>')
+simple('about','About '+S['brand_name'],'Who we are and how our blueprints are produced.',f'<h1>About {B}</h1><p>{B} is a library of structured business blueprints and automation tool specifications for founders, freelancers and agencies who want a clear starting point instead of a blank page.</p><h2>How the content is made</h2><p>Each blueprint is compiled with AI-assisted research into a consistent format: the problem, the opportunity, how to start, how it can scale, and what protects it. We label revenue figures as unverified estimates because they are.</p><h2>Who it is for</h2><ul class="ul"><li>First-time founders choosing a local business to start</li><li>Google Workspace freelancers and agencies looking for productized services</li><li>Consultants who need structured briefs for clients</li></ul><p>Browse the <a href="../#catalog">catalog</a> and preview anything free before you buy.</p>')
+cats={}
+for r in ITEMS: cats[r['category']]=cats.get(r['category'],0)+1
+top=sorted(cats.items(),key=lambda x:-x[1])[:8]; locs={r['location'] for r in ITEMS}
+tst=''.join(f'<div class="box rv quote">“{e(t["quote"])}”<br><br><b>{e(t["name"])}</b><br><small>{e(t.get("role",""))}</small></div>' for t in TEST)
+home=f'''<section class="hero"><div class="w"><h1>Find your next business idea. <em>Start with a clear blueprint.</em></h1><p>{len(ITEMS)} researched blueprints and automation tool specs across {len(locs)} markets and {len(cats)} industries. Preview free, unlock the full document instantly.</p>
+<form class="sb" id="hq"><input id="hs" placeholder="Search e.g. clinic, logistics, restaurant, Garia…"><button class="btn">Search</button></form><div class="chips"><span class="chip" data-q="clinic">Clinics</span><span class="chip" data-q="logistics">Logistics</span><span class="chip" data-q="school">Education</span><span class="chip" data-q="inventory">Inventory</span><span class="chip" data-q="payroll">Payroll</span></div>
+<div class="trust"><span>Free previews</span><span>Instant Google Doc delivery</span><span>Secure Razorpay checkout</span><span>{RD}-day delivery guarantee</span></div></div></section>
+<section class="sec" id="how"><div class="w ctr"><h2>How it works</h2><p class="sub">From idea to a usable plan in minutes.</p><div class="steps"><div class="box rv"><b class="n">1</b><h3>Search &amp; preview</h3><p>Filter by city, industry or type and read the free preview.</p></div><div class="box rv"><b class="n">2</b><h3>Unlock securely</h3><p>Pay once through Razorpay. No account or subscription.</p></div><div class="box rv"><b class="n">3</b><h3>Get your Doc</h3><p>A private Google Doc is shared to your email with the full blueprint.</p></div></div></div></section>
+<section class="sec alt"><div class="w ctr"><h2>Browse by industry</h2><p class="sub">Jump straight to the sectors with the most blueprints.</p><div class="cats">{''.join(f'<button class="box catb rv" data-cat="{e(c)}"><b>{e(c)}</b><br><small>{n} items</small></button>' for c,n in top)}</div></div></section>
+<section class="sec" id="catalog"><div class="w"><h2>The full catalog</h2><div class="tools"><button class="tab on" data-ty="">All</button><button class="tab" data-ty="Business Opportunity">Business blueprints</button><button class="tab" data-ty="Software Tool">Software tools</button></div>
+<div class="tools"><input id="q" placeholder="Search by keyword…"><select id="lo"></select><select id="ca"></select><select id="so"><option value="">Sort: Featured</option><option value="pa">Price: low to high</option><option value="pd">Price: high to low</option><option value="az">Name A-Z</option></select></div><p id="cnt" style="color:var(--mut)"></p><div class="g" id="grid"></div><p class="ctr"><button class="btn o" id="more">Load more</button></p></div></section>
+<section class="sec alt"><div class="w"><div class="ctr"><h2>What every blueprint includes</h2><p class="sub">Consistent structure so you can compare ideas quickly.</p></div><div class="feat"><div class="box rv"><h3>🎯 Clear problem &amp; opportunity</h3><p>Who has the pain and why it is worth solving locally.</p></div><div class="box rv"><h3>🚀 A concrete first step</h3><p>A small action to test demand before spending money.</p></div><div class="box rv"><h3>📈 Scale path &amp; moat</h3><p>How it can grow and what keeps competitors out.</p></div><div class="box rv"><h3>⚠ Honest estimates</h3><p>Revenue figures are clearly labelled as unverified estimates.</p></div></div></div></section>
+{('<section class="sec"><div class="w ctr"><h2>What buyers say</h2><div class="feat" style="margin-top:30px">'+tst+'</div></div></section>') if TEST else ''}
+<section class="sec"><div class="w" style="max-width:820px"><div class="ctr"><h2>Frequently asked questions</h2></div>{faq_html()}</div></section>
+<section class="sec"><div class="w"><div class="cta"><h2>Get free previews in your inbox</h2><p>New blueprints and sample previews. No spam, unsubscribe anytime.</p>{leadform('homepage-cta','Subscribe')}</div></div></section>'''
+open(OUT+'/index.html','w',encoding='utf-8').write(page(S['brand_name']+' – '+S['tagline'],'Search researched business blueprints and automation tools. Free previews, instant Google Doc delivery.','/',home,faq_ld()+'<script type="application/ld+json">%s</script>'%json.dumps({"@context":"https://schema.org","@type":"Organization","name":S['brand_name'],"url":SITE})))
+pages=['/','/about/','/faq/','/contact/','/terms/','/privacy/','/refund/']
+open(OUT+'/sitemap.xml','w').write('<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'+''.join(f'<url><loc>{SITE}{u}</loc></url>' for u in pages+[f"/o/{r['slug']}/" for r in ITEMS])+'</urlset>')
+open(OUT+'/robots.txt','w').write(f'User-agent: *\nAllow: /\nSitemap: {SITE}/sitemap.xml\n'); print('built',len(ITEMS),'items')
