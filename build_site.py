@@ -2,7 +2,7 @@
 """Static site generator v2. Source: Apps Script export (API_URL + EXPORT_KEY env) or --csv. Output: ./docs"""
 import os,sys,json,csv,html,urllib.request,urllib.parse,shutil,datetime,re
 OUT='docs'; e=html.escape
-fix=lambda s:(s or '').replace('â€“','–').replace('â€™','’').replace('â€”','—')
+fix=lambda s:s.replace('â€“','–').replace('â€™','’').replace('â€”','—') if isinstance(s,str) else ('' if s is None else s)
 def load():
     D=dict(brand_name='Venture Atlas',brand_color='#0f766e',site_url=os.environ.get('SITE_URL','https://example.github.io/repo'),support_email='',whatsapp='',business_address='',refund_days=7,currency='INR',tagline='Researched business blueprints and ready-to-build automation tools',disclaimer='Income figures are unverified illustrative estimates from the source research, not guarantees.')
     if '--csv' in sys.argv:
