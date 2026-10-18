@@ -1,0 +1,14 @@
+name: build
+on: { workflow_dispatch: {}, schedule: [{ cron: '0 2 * * *' }] }
+permissions: { contents: write }
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 build_site.py
+        env: { API_URL: '${{ secrets.API_URL }}', EXPORT_KEY: '${{ secrets.EXPORT_KEY }}' }
+      - run: |
+          git config user.name bot && git config user.email bot@users.noreply.github.com
+          git add docs && git commit -m "rebuild" || exit 0
+          git push
