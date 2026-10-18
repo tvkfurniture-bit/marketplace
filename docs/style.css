@@ -1,0 +1,11 @@
+*{box-sizing:border-box}body{margin:0;font:16px/1.6 system-ui,Segoe UI,Arial;color:#0f172a;background:#f8fafc}a{color:var(--c)}
+:root{--c:#0f766e}.w{max-width:1100px;margin:auto;padding:0 18px}header{background:#fff;border-bottom:1px solid #e2e8f0;position:sticky;top:0;z-index:9}
+header .w{display:flex;justify-content:space-between;align-items:center;height:60px}.logo{font-weight:800;color:var(--c);text-decoration:none;font-size:20px}
+.hero{background:linear-gradient(135deg,var(--c),#0f172a);color:#fff;padding:56px 0}.hero h1{font-size:clamp(28px,5vw,46px);margin:0 0 10px}.hero p{max-width:640px;opacity:.9}
+.bar{display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:10px;margin:-26px 0 18px}input,select{width:100%;padding:12px;border:1px solid #cbd5e1;border-radius:10px;font:inherit;background:#fff}
+.g{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px}.card{background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:18px;display:flex;flex-direction:column;gap:8px;text-decoration:none;color:inherit;transition:.2s}
+.card:hover{transform:translateY(-3px);box-shadow:0 10px 24px #0001}.tag{display:inline-block;font-size:12px;padding:2px 9px;border-radius:99px;background:#ecfeff;color:var(--c);margin-right:4px}
+.btn{background:var(--c);color:#fff;border:0;padding:13px 22px;border-radius:10px;font:600 16px inherit;cursor:pointer;text-decoration:none;display:inline-block}.btn:disabled{opacity:.5}
+.lock{position:relative;background:#fff;border:1px dashed #94a3b8;border-radius:12px;padding:16px;margin:16px 0}.lock li{filter:blur(4px);user-select:none}.buy{background:#fff;border:2px solid var(--c);border-radius:14px;padding:20px;position:sticky;top:80px}
+.two{display:grid;grid-template-columns:2fr 1fr;gap:24px;margin:28px 0}.kpi{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:22px 0}.kpi div{background:#fff;border-radius:12px;padding:14px;text-align:center;border:1px solid #e2e8f0}.kpi b{display:block;font-size:22px;color:var(--c)}
+footer{padding:30px 0;color:#64748b;font-size:13px}.msg{margin-top:10px;font-size:14px}@media(max-width:760px){.bar,.two{grid-template-columns:1fr}.buy{position:static}.kpi{grid-template-columns:1fr 1fr}}
