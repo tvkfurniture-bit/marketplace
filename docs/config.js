@@ -1,1 +1,1 @@
-window.MP={"api": "https://script.google.com/macros/s/AKfycbztWole4h7s6f1-jKRT6fIKoEG209HPW1MARl7R8nxPn03jWa5RNY5-M0IePIyph8sd/exec", "cur": "INR", "brand": "Venture Atlas", "v": "20261025070308"};
+window.MP={"api": "https://script.google.com/macros/s/AKfycbztWole4h7s6f1-jKRT6fIKoEG209HPW1MARl7R8nxPn03jWa5RNY5-M0IePIyph8sd/exec", "cur": "INR", "brand": "Venture Atlas", "v": "20261026070958"};
